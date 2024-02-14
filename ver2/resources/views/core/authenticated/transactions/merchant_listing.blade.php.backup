@@ -1,0 +1,101 @@
+@extends('core.authenticated.layout.layout')
+@section('title')  ProbasePay | Transactions @stop
+
+@section('content')
+
+@include('partials.errors')
+        <!-- Info boxes --><div class="row">
+    <div class="col-xs-12">
+        <div class="box">
+            <div class="box-header">
+                <h3 class="box-title">{{(isset($merchant) && $merchant!=null) ? "Merchant " : ""}}Transactions List</h3>
+            </div>
+            <!-- /.box-header -->
+            <div class="box-body">
+                <div id="example2_wrapper" class="dataTables_wrapper form-inline dt-bootstrap">
+                    @if(isset($device) && $device!=null)
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <label for="inputEmail3" class="col-sm-2 control-label">Device Code</label>
+
+                                <div class="col-sm-10">
+                                    {{$device->deviceCode}}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <label for="inputEmail3" class="col-sm-2 control-label">Device Serial Number</label>
+
+                                <div class="col-sm-10">
+                                    {{$device->deviceSerialNo}}
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                    @if(isset($merchant) && $merchant!=null)
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <label for="inputEmail3" class="col-sm-2 control-label">Merchant Name</label>
+
+                            <div class="col-sm-10">
+                                {{$merchant->merchantName}}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <label for="inputEmail3" class="col-sm-2 control-label">Merchant Code</label>
+
+                            <div class="col-sm-10">
+                                {{$merchant->merchantCode}}
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+                    @if(isset($channel) && $channel!=null)
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <label for="inputEmail3" class="col-sm-2 control-label">Channel</label>
+
+                                <div class="col-sm-10">
+                                    {{$channel}}
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    <div class="row">
+                        <div class="col-sm-6"></div>
+                        <div class="col-sm-6"></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-12">
+                            <table id="example2" class="table table-bordered table-hover dataTable" role="grid" aria-describedby="example2_info">
+                                <thead>
+
+                                </thead>
+
+                                <tbody>
+
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- /.box-body -->
+        </div>
+        <!-- /.box -->
+    </div>
+    <!-- /.col -->
+</div>
+
+
+
+@stop
+@section('section_title') Transaction Listing @stop
+@section('scripts')
+
+@stop
+

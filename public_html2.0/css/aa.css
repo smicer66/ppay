@@ -1,0 +1,130 @@
+.pendingstatus{
+	background-color: #0d6efd !important;
+	color: #fff !important;
+	padding: 5px !important;
+	border-radius: 3px !important;
+}
+
+.successstatus{
+	background-color: #198754 !important;
+	color: #fff !important;
+	padding: 5px !important;
+	border-radius: 3px !important;
+}
+
+.customer_canceledstatus, .failstatus{
+	background-color: #dc3545 !important;
+	color: #fff !important;
+	padding: 5px !important;
+	border-radius: 3px !important;
+}
+
+.request_rollbackstatus{
+	background-color: #ffc107 !important;
+	color: #fff !important;
+	padding: 5px !important;
+	border-radius: 3px !important;
+}
+
+.reversedstatus{
+	background-color: #000000 !important;
+	color: #fff !important;
+	padding: 5px !important;
+	border-radius: 3px !important;
+}
+
+.channelspan{
+	background-color: #6c757d !important;
+	color: #fff !important;
+	padding: 5px !important;
+	border-radius: 3px !important;
+}
+
+.paymentmodespan{
+	background-color: #ff6600 !important;
+	color: #fff !important;
+	padding: 5px !important;
+	border-radius: 3px !important;
+}
+
+.currencymodespan{
+	background-color: #9334eb !important;
+	color: #fff !important;
+	padding: 5px !important;
+	border-radius: 3px !important;
+} 
+
+.reportFields{
+	padding-bottom: 5px !important;
+}
+
+table { border-collapse: collapse; empty-cells: show; }
+
+
+tr.strikethrough  td { position:relative        }
+
+tr.strikethrough td:before {
+	/*text-decoration: line-through;
+	text-decoration-color: red;*/
+	content: " ";
+  	position: absolute;
+  	top: 50%;
+  	left: 0;
+  	border-bottom: 1px solid red;
+  	width: 100%;
+}
+
+
+tr.strikethrough td:after {
+  content: "\00B7";
+  font-size: 1px;
+
+}
+
+
+
+fieldset {
+    margin-top: 2rem;
+}
+fieldset {
+    min-width: 0;
+    padding: 10px;
+    margin: 0;
+    border: 1px solid #dde2ec !important;
+}
+
+
+
+
+
+legend {
+    font-size: 0.99rem;
+    display: block;
+    margin-bottom: 1.5rem;
+    position: inherit !important;
+    color: #000000 !important;
+}
+
+legend {
+    display: block;
+    width: auto !important;
+    max-width: 100%;
+    padding: 10px !important;
+    padding-bottom: 0px !important;
+    margin-bottom: 0.5rem;
+    font-size: 1.2rem !important;
+    line-height: inherit;
+    color: inherit;
+    white-space: normal;
+}
+
+legend:before {
+    content: "";
+    position: absolute;
+    left: 0px;
+    right: 0px;
+    height: 1px;
+    top: 50%;
+    background-color: rgba(0, 0, 0, 0.0) !important;
+    z-index: 1;
+}

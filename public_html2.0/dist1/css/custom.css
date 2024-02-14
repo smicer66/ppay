@@ -1,0 +1,120 @@
+.form-wizard .content-wrapper {
+    padding-top: 30px;
+}
+
+.form-wizard .content-wrapper .content-header h1 {
+    font-size: 36px;
+}
+
+.form-wizard .content-wrapper .content-header h3:before {
+    content: '\f101';
+    font-family: 'FontAwesome';
+    margin-right: 12px;
+    color: #fff936;
+}
+.form-wizard .content-wrapper .content-header h3 {
+    font-size: 24px;
+    font-weight: 300;
+    color: #e2e2e2;
+    background: #00a65a;
+    display: inline-block;
+    padding: 8px 16px;
+}
+
+.form-wizard .form-wrapper {
+    background: rgba(255,255,255,0.5);
+}
+
+.form-wrapper .form-control {
+    min-height: 42px;
+}
+
+.form-wrapper .form-control:focus {
+    border-color: #00a65a;
+}
+
+.form-wizard .form-wrapper .box,
+.form-wizard .form-wrapper .box .box-footer {
+    background: transparent !important;
+    border-radius: 0;
+}
+
+.form-wizard .form-wrapper .btn.btn-success {
+    background: #00a65a;
+    border-color: #00a65a;
+}
+
+span.naira {
+    text-decoration: line-through;
+}
+
+.yellow {
+    color: #fff936;
+}
+
+div#staff_account {
+    display: none;
+}
+
+div#staffPassword, div#studentPassword {
+    display: none;
+}
+
+.callout-holder {
+    margin-bottom: 8px;
+    margin-top: 8px;
+}
+
+table.borderless td, table.borderless th {
+    border: none !important;
+}
+
+.nav-tabs-custom>.nav-tabs>li.active {
+    border-top-color: #00a65a;
+}
+.vertical-text {
+    transform: rotate(270deg);
+    transform-origin: 80% 50%;
+    float: left;
+}
+
+
+
+/* SMS Landing Page */
+.landing-page {
+    padding-top: 60px;
+    color: #ddd;
+    background: #212121;
+    background: url('../img/landing-bg.jpg');
+    background-size: cover;
+    /*background: red; *//* For browsers that do not support gradients */
+    /*background: -webkit-linear-gradient(bottom,rgba(0,141,76,1),rgba(0,166,90,0)); *//*Safari 5.1-6*/
+    /*background: -o-linear-gradient(top,rgba(0,141,76,1),rgba(0,166,90,0)); *//*Opera 11.1-12*/
+    /*background: -moz-linear-gradient(top,rgba(0,141,76,1),rgba(0,166,90,0)); *//*Fx 3.6-15*/
+    /*background: linear-gradient(to top, rgba(0,141,76,1), rgba(0,166,90,0)); *//*Standard*/
+}
+
+.landing-page form {
+    background: rgba(255,255,255,0.85);
+    color: #212121;
+    padding: 40px;
+    border-radius: 4px;
+    box-shadow: 2px 2px 2px rgba(0,0,0,0.35);
+}
+
+.landing-page form .form-control {
+    min-height: 50px;
+    border: 1px solid #ccc;
+}
+
+.school-info h2 {
+    font-weight: 800;
+    color: #fff;
+    font-size: 56px;
+    text-shadow: 2px 2px 3px rgba(0,0,0,0.5);
+}
+
+.school-info p {
+    text-align: justify;
+    text-justify: inter-word;
+}

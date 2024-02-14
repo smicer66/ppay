@@ -1,0 +1,64 @@
+.form-wizard .content-wrapper {
+    padding-top: 30px;
+}
+
+.form-wizard .content-wrapper .content-header h1 {
+    font-size: 36px;
+}
+
+.form-wizard .content-wrapper .content-header h3:before {
+    content: '\f101';
+    font-family: 'FontAwesome';
+    margin-right: 12px;
+    color: #fff936;
+}
+.form-wizard .content-wrapper .content-header h3 {
+    font-size: 24px;
+    font-weight: 300;
+    color: #e2e2e2;
+    background: #00a65a;
+    display: inline-block;
+    padding: 8px 16px;
+}
+
+.form-wizard .form-wrapper {
+    background: rgba(255,255,255,0.5);
+}
+
+.form-wizard .form-wrapper .form-control {
+    min-height: 42px;
+}
+
+.form-wizard .form-wrapper input:focus,
+.form-wizard .form-wrapper file:focus,
+.form-wizard .form-wrapper select:focus {
+    border-color: #00a65a;
+}
+
+.form-wizard .form-wrapper .box,
+.form-wizard .form-wrapper .box .box-footer {
+    background: transparent !important;
+    border-radius: 0;
+}
+
+.form-wizard .form-wrapper .btn.btn-success {
+    background: #00a65a;
+    border-color: #00a65a;
+}
+
+
+span.naira {
+    /*text-decoration: line-through;*/
+}
+
+.yellow {
+    color: #fff936;
+}
+
+div#staff_account {
+    display: none;
+}
+
+div#staffPassword, div#studentPassword {
+    display: none;
+}

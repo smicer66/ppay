@@ -1,0 +1,1783 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+
+use App\Http\Requests;
+use App\Http\Controllers\Controller;
+use Validator;
+use Redirect;
+
+class PaymentController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index()
+    {
+        //
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function create()
+    {
+        //
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        //
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function show($id)
+    {
+        //
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function edit($id)
+    {
+        //
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        //
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy($id)
+    {
+        //
+    }
+
+    public function initializePaymentForWeb()
+    {
+        $input = \Input::all();
+
+
+        //dd(\App\Models\ServiceType::$SCHOOL_FEES." --- ".$input['serviceTypeId']);
+        if(in_array('serviceTypeId', array_keys($input)))
+        {
+            $serviceType = $input['serviceTypeId'];
+
+
+            switch($serviceType)
+            {
+                case \App\Models\ServiceType::$GENERAL_ECOMMERCE :
+                    return $this->handleForGeneralEcommerce($input);
+                    break;
+                case \App\Models\ServiceType::$SCHOOL_FEES :
+                    return $this->handleForTutionFees($input);
+                    break;
+            }
+        }else{
+            //No ServiceType In Form submitted
+            $returnResponse["statusmessage"] = "Service Type Not Found";
+            $returnResponse["reason"] = "Service Type Not Found. ";
+            $returnResponse["merchantId"] = $input['merchantId'];
+            $returnResponse["deviceCode"] = $input['deviceCode'];
+            $returnResponse["status"] = '04';
+            $returnResponse["transactionRef"] = $input['txnRef'];
+            $returnResponse["transactionDate"] = date('Y-m-d H:i:s');
+            $returnResponse["orderId"] = $input['orderId'];
+            $returnResponse["redirectUrl"] = $input['returnUrl'];
+            return view('guests.payment.web.eagle_card_payment_final_route', compact('returnResponse'));
+        }
+
+    }
+
+
+    private function handleForTutionFees($input)
+    {
+
+        $paymentItems = $input['paymentItem'];
+        $itemAmounts = $input['amount'];
+        $currency = $input['currency'];
+        $amt = 0;
+        if(!isset($input['paymentItem']) || !isset($input['amount']) || !isset($input['currency']) || !isset($input['merchantId']) || !isset($input['hash']) || !isset($input['deviceCode']) || !isset($input['serviceTypeId']) || !isset($input['orderId']) || !isset($input['responseurl']) || !isset($input['currency']))
+        {
+            return \Redirect::back()->with('error', 'Missing fields. Ensure your fields are missing. Consult the API doc for fields required to be present');
+        }
+        
+        if(sizeof($paymentItems)>0 && sizeof($paymentItems)==sizeof($itemAmounts)) {
+            for ($i = 0; $i < sizeof($itemAmounts); $i++) {
+                $amt = $amt + $itemAmounts[$i];
+            }
+
+
+            $dataForServer['merchantCode'] = $input['merchantId'];
+            $dataForServer['hash'] = $input['hash'];
+            $dataForServer['deviceCode'] = $input['deviceCode'];
+            $dataForServer['serviceTypeId'] = $input['serviceTypeId'];
+            $dataForServer['orderId'] = $input['orderId'];
+            $dataForServer['amount'] = number_format($amt, 2, '.', '');
+            $dataForServer['responseUrl'] = $input['responseurl'];
+
+            $result = handleSOAPCalls('pullPaymentDefaultData', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/UtilityServices?wsdl', $dataForServer);
+
+
+            if(isset($result->status) && $result->status == 1000)
+            {
+                $all_banks = json_decode($result->all_banks);
+                $all_provinces = json_decode($result->all_provinces);
+                $all_countries = json_decode($result->all_countries);
+                $fixedChargePerTransaction = floatval($result->fixedChargePerTransaction);
+                $percentagePerTransaction = floatval($result->percentagePerTransaction);
+                $input = \Crypt::encrypt($input);
+
+
+                return view('guests.payment.web.index', compact('input', 'paymentTitle', 'amt',
+                    'paymentItems', 'itemAmounts', 'all_banks', 'all_provinces', 'fixedChargePerTransaction',
+                    'percentagePerTransaction','all_countries', 'currency'));
+            }
+            else
+            {
+                $response["statusmessage"] = isset($result->message) ? $result->message : "System Error";
+                $response["reason"] = isset($result->message) ? $result->message : "System Error";
+                $response["merchantId"] = $input['merchantId'];
+                $response["deviceCode"] = $input['deviceCode'];
+                $response["status"] = isset($result->status) ? $result->status : '99';
+                $response["transactionDate"] = date('Y-m-d H:i:s');
+                $response["orderId"] = $input['orderId'];
+                $response["redirectUrl"] = $input['responseurl'];
+                return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+            }
+
+        }
+        else{
+            $response["statusmessage"] = "Invalid Dataset";
+            $response["reason"] = "Invalid Dataset Provided. Parameters Provided are Incomplete";
+            $response["merchantId"] = $input['merchantId'];
+            $response["deviceCode"] = $input['deviceCode'];
+            $response["status"] = '12';
+            $response["transactionDate"] = date('Y-m-d H:i:s');
+            $response["orderId"] = $input['orderId'];
+            $response["redirectUrl"] = $input['responseurl'];
+            return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+        }
+    }
+
+
+    private function handleForGeneralEcommerce($input)
+    {
+        if(sizeof($input)>0)
+        {
+
+            $paymentItems = $input['paymentItem'];
+            $itemAmounts = $input['amount'];
+            $currency = $input['currency'];
+            $amt = 0;
+            if (sizeof($paymentItems) > 0 && sizeof($paymentItems) == sizeof($itemAmounts)) {
+                for ($i = 0; $i < sizeof($itemAmounts); $i++) {
+                    $amt = $amt + $itemAmounts[$i];
+                }
+
+                $dataForServer['merchantCode'] = $input['merchantId'];
+                $dataForServer['hash'] = $input['hash'];
+                $dataForServer['deviceCode'] = $input['deviceCode'];
+                $dataForServer['serviceTypeId'] = $input['serviceTypeId'];
+                $dataForServer['orderId'] = $input['orderId'];
+                $dataForServer['amount'] = number_format($amt, 2, '.', '');
+                $dataForServer['responseUrl'] = $input['responseurl'];
+                $input = \Crypt::encrypt($input);
+
+                $result = handleSOAPCalls('pullPaymentDefaultData', 'http://' . getServiceBaseURL() . '/ProbasePayEngine/services/UtilityServices?wsdl', $dataForServer);
+
+
+                if (isset($result->status) && $result->status == 1000) {
+                    $all_provinces = json_decode($result->all_provinces);
+                    $all_countries = json_decode($result->all_countries);
+                    $all_banks = json_decode($result->all_banks);
+
+
+                    $fixedChargePerTransaction = floatval($result->fixedChargePerTransaction);
+                    $percentagePerTransaction = floatval($result->percentagePerTransaction);
+                    return view('guests.payment.web.index', compact('input', 'paymentTitle', 'amt',
+                        'paymentItems', 'itemAmounts', 'all_provinces', 'fixedChargePerTransaction',
+                        'percentagePerTransaction', 'all_countries', 'all_banks', 'currency'));
+                } else {
+                    $returnResponse["statusmessage"] = isset($result->message) ? $result->message : "System Error";
+                    $returnResponse["reason"] = isset($result->message) ? $result->message : "System Error";
+                    $returnResponse["merchantId"] = $input['merchantId'];
+                    $returnResponse["deviceCode"] = $input['deviceCode'];
+                    $returnResponse["status"] = isset($result->status) ? $result->status : '99';
+                    $returnResponse["transactionRef"] = $input['txnRef'];
+                    $returnResponse["transactionDate"] = date('Y-m-d H:i:s');
+                    $returnResponse["orderId"] = $input['orderId'];
+                    $returnResponse["redirectUrl"] = $input['returnUrl'];
+                    return view('guests.payment.web.eagle_card_payment_final_route', compact('returnResponse'));
+                }
+            } else {
+                $returnResponse["statusmessage"] = "Invalid Dataset";
+                $returnResponse["reason"] = "Invalid Dataset Provided. Parameters Provided are Incomplete";
+                $returnResponse["merchantId"] = $input['merchantId'];
+                $returnResponse["deviceCode"] = $input['deviceCode'];
+                $returnResponse["status"] = '02';
+                $returnResponse["transactionRef"] = $input['txnRef'];
+                $returnResponse["transactionDate"] = date('Y-m-d H:i:s');
+                $returnResponse["orderId"] = $input['orderId'];
+                $returnResponse["redirectUrl"] = $input['returnUrl'];
+                return view('guests.payment.web.eagle_card_payment_final_route', compact('returnResponse'));
+            }
+        }else
+        {
+            $returnResponse["statusmessage"] = "No Data Provided";
+            $returnResponse["reason"] = "No Data Provided. Parameters Provided are Incomplete";
+            $returnResponse["status"] = '09';
+            $returnResponse["transactionDate"] = date('Y-m-d H:i:s');
+            return view('guests.payment.web.eagle_card_payment_final_route', compact('returnResponse'));
+        }
+    }
+
+
+    public function translatePay()
+    {
+
+        $input = \Input::all();
+
+
+        $data = \Crypt::decrypt($input['data']);
+        $input = $input + $data;
+
+        unset($input['data']);
+
+
+        if (in_array('payoption', array_keys($input)) && $input['payoption']!=NULL) {
+            $payoption = $input['payoption'];
+            switch ($payoption) {
+                case 'EAGLECARD' :
+                    return $this->handleEagleCardPayment($input);
+                    break;
+                case 'LOCALVISA' :
+                    return $this->handleCybersourcePayment($input);
+                    break;
+                case 'BANKONLINE' :
+                    return $this->handleBankOnlinePayment($input);
+                    break;
+                case 'OTC' :
+                    return $this->handleOTCPayment($input);
+                    break;
+                case 'MMONEY' :
+                    $this->handleMMoneyPayment($input);
+                    break;
+                case 'WALLET' :
+                    return $this->handleWalletPayment($input);
+                    break;
+            }
+        } else {
+            //No ServiceType In Form submitted
+            $response["statusmessage"] = "Payment Option Not Specified";
+            $response["reason"] = "Payment Option Needs to Be Specified";
+            $response["merchantId"] = $input['merchantId'];
+            $response["deviceCode"] = $input['deviceCode'];
+            $response["status"] = '10';
+            $response["transactionDate"] = date('Y-m-d H:i:s');
+            $response["orderId"] = $input['orderId'];
+            $response["redirectUrl"] = $input['responseurl'];
+            return \Redirect::to('/payments/init')->with('error', 'Payment Option Not Specified');
+        }
+    }
+
+
+    private function handleEagleCardPayment($input)
+    {
+
+        $data = \Crypt::encrypt($input);
+        $paymentItems = $input['paymentItem'];
+        $itemAmounts = $input['amount'];
+        $payerName = $input['payerName'];
+
+        return view('guests.payment.web.eagle_card_payment', compact('data', 'itemAmounts', 'paymentItems', 'payerName'));
+    }
+
+
+
+
+
+
+    private function handleBankOnlinePayment($input)
+    {
+        $data = $input;
+        $paymentItems = $input['paymentItem'];
+        $itemAmounts = $input['amount'];
+
+        $total = 0;
+        for($i=0; $i<sizeof($itemAmounts); $i++)
+        {
+            $total = $total + $itemAmounts[$i];
+        }
+
+        if(isset($data['net-banking']) && $data['net-banking']!=null)
+        {
+            $jsonData = array(
+                'payeeFirstName' => $data['payerName'],
+                'payeeEmail' => $data['payerEmail'],
+                'payeeMobile' => $data['payerPhone'],
+                'amount' => (number_format($total, 2, '.', '')),
+                'responseUrl' => $data['responseurl'],
+                'orderId' => $data['orderId'],
+                'hash' => $data['hash'],
+                'merchantId' => $data['merchantId'],
+                'serviceTypeId' => $data['serviceTypeId'],
+                'billingPayeeFirstName' => $data['firstName'],
+                'billingPayeeLastName' => $data['lastName'],
+                'billPayeeMobile' => $data['countryCode']."".$data['phoneNumber'],
+                'billingPayeeEmail' => $data['email'],
+                'streetAddress' => $data['streetAddress'],
+                'city' => $data['city'],
+                'district' => intval($data['district']),
+                'deviceCode' => $data['deviceCode'],
+                'bank' => $data['net-banking'],
+            );
+            $defaultReturnUrl = $data['responseurl'];
+
+            $jsonData = \Crypt::encrypt(json_encode($jsonData));
+
+            $jsonDataLump = array('bankingObject' => $jsonData,
+                'bankcode' => "PROBASE");
+            $jsonEncode = json_encode($jsonDataLump);
+
+            $base64 = base64_encode($jsonEncode);
+            $dataForServer = array('bankingTxnObject' => $base64);
+
+            $result = handleSOAPCalls('processBankOnlineWebPayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataForServer);
+            $data = \Crypt::encrypt($input);
+
+
+            //dd($result);
+            if(isset($result->status) && $result->status == "00")
+            {
+
+                $response['unique_reference'] = $result->txnRef;
+                $response['orderId'] = $result->orderId;
+                $response['transactionRef'] = $result->txnRef;
+                $response['student_number'] = $input['payerId'];
+                $response['student_name'] = $input['payerName'];
+                $response['student_id'] = $input['nationalId'];
+                $response['term'] = $input['scope'];
+                $response['description'] = $input['description'];
+                $response['amount'] = number_format($total, 2, '.', '');
+                //$response['redirectUrl'] = 'http://demo.probasegroup.com/SmartPAY-Test/probase_pay_school_payments.php';
+                $response['redirectUrl'] = 'http://probase.a2hosted.com/services/probasepay-sch/';
+                //$response['redirectUrl'] = 'http://localhost:8090/SMARTPAY_1_2/services/probasepay/';
+                //dd($response);
+                return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+
+            }else
+            {
+                //dd($result);
+                \Session::flash('error', (isset($result->message) ? $result->message : 'Error experienced. Please try again'));
+                $payerName = $input['payerName'];
+                return view('guests.payment.web.eagle_card_payment', compact('data', 'paymentItems', 'itemAmounts', 'payerName'));
+            }
+        }
+        else
+        {
+
+        }
+
+
+
+
+
+
+    }
+
+
+    public function handleOTCPayment($input)
+    {
+        $data = $input;
+        $paymentItems = $input['paymentItem'];
+        $itemAmounts = $input['amount'];
+
+        $total = 0;
+        for($i=0; $i<sizeof($itemAmounts); $i++)
+        {
+            $total = $total + $itemAmounts[$i];
+        }
+
+
+        $jsonData = array(
+            'payeeFirstName' => $data['payerName'],
+            'payeeEmail' => $data['payerEmail'],
+            'payeeMobile' => $data['payerPhone'],
+            'amount' => (number_format($total, 2, '.', '')),
+            'responseUrl' => $data['responseurl'],
+            'orderId' => $data['orderId'],
+            'hash' => $data['hash'],
+            'merchantId' => $data['merchantId'],
+            'serviceTypeId' => $data['serviceTypeId'],
+            'billingPayeeFirstName' => $data['firstName'],
+            'billingPayeeLastName' => $data['lastName'],
+            'billPayeeMobile' => $data['phoneNumber'],
+            'billingPayeeEmail' => $data['email'],
+            'streetAddress' => $data['streetAddress'],
+            'city' => $data['city'],
+            'district' => intval($data['district']),
+            'deviceCode' => $data['deviceCode'],
+            'bank' => $data['net-banking'],
+        );
+        $defaultReturnUrl = $data['responseurl'];
+
+        $jsonData = \Crypt::encrypt(json_encode($jsonData));
+
+        $jsonDataLump = array('otcObject' => $jsonData,
+            'bankcode' => "PROBASE");
+        $jsonEncode = json_encode($jsonDataLump);
+
+        $base64 = base64_encode($jsonEncode);
+        $dataForServer = array('otcPaymentObject' => $base64);
+
+        $result = handleSOAPCalls('processOTCWebPayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataForServer);
+        $data = \Crypt::encrypt($input);
+
+
+
+
+        //dd($result);
+        if(isset($result->status) && $result->status == "00")
+        {
+
+            $response['unique_reference'] = $result->txnRef;
+            $response['transactionRef'] = $result->txnRef;
+            $response['channel'] = $result->channel;
+            $response['rpin'] = $result->rPin;
+            $response['student_number'] = $input['payerId'];
+            $response['student_name'] = $input['payerName'];
+            $response['student_id'] = $input['nationalId'];
+            $response['term'] = $input['scope'];
+            $response['orderId'] = $result->orderId;
+            $response['status'] = "00";
+            $response['description'] = $input['description'];
+            $response['amount'] = number_format($total, 2, '.', '');
+            $response['redirectUrl'] = $result->returnUrl;
+            //dd($response);
+            $amounttopay = $result->amounttopay;
+            $payermobile = $result->payermobile;
+
+            $msg = "New Payment Ref No.:".$result->rPin."\nAmount To Pay:".$amounttopay."\nPay at any of our supporting banks or outlets. \nThank You";
+            send_sms($payermobile, $msg);
+
+
+            return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+
+        }else
+        {
+            //dd($result);
+            \Session::flash('error', (isset($result->message) ? $result->message : 'Error experienced. Please try again'));
+            $payerName = $input['payerName'];
+            return \Redirect::back()->with('error', (isset($result->message) ? $result->message : 'Error experienced. Please try again'));
+        }
+
+
+
+    }
+
+
+    public function handleMMoneyPayment($input)
+	{
+		$data = $input;
+        $paymentItems = $input['paymentItem'];
+        $itemAmounts = $input['amount'];
+
+        $total = 0;
+        for($i=0; $i<sizeof($itemAmounts); $i++)
+        {
+            $total = $total + $itemAmounts[$i];
+        }
+
+
+        $jsonData = array(
+            'payeeFirstName' => $data['payerName'],
+            'payeeEmail' => $data['payerEmail'],
+            'payeeMobile' => $data['payerPhone'],
+            'amount' => (number_format($total, 2, '.', '')),
+            'responseUrl' => $data['responseurl'],
+            'orderId' => $data['orderId'],
+            'hash' => $data['hash'],
+            'merchantId' => $data['merchantId'],
+            'serviceTypeId' => $data['serviceTypeId'],
+            'billingPayeeFirstName' => $data['firstName'],
+            'billingPayeeLastName' => $data['lastName'],
+            'billPayeeMobile' => $data['phoneNumber'],
+            'billingPayeeEmail' => $data['email'],
+            'streetAddress' => $data['streetAddress'],
+            'city' => $data['city'],
+            'district' => intval($data['district']),
+            'deviceCode' => $data['deviceCode'],
+            'bank' => $data['net-banking'],
+        );
+		
+        $defaultReturnUrl = $data['responseurl'];
+
+        $jsonData = \Crypt::encrypt(json_encode($jsonData));
+
+        $jsonDataLump = array('mmoneyObject' => $jsonData,
+            'bankcode' => "PROBASE");
+        $jsonEncode = json_encode($jsonDataLump);
+
+        $base64 = base64_encode($jsonEncode);
+        $dataForServer = array('mmoneyPaymentObject' => $base64);
+
+        $result = handleSOAPCalls('initiateMMoneyPayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataForServer);
+        $data = \Crypt::encrypt($input);
+
+
+        //dd($result);
+        if(isset($result->status) && $result->status == 1002)
+        {
+
+            $response['unique_reference'] = $result->txnRef;
+            $response['transactionRef'] = $result->txnRef;
+            $response['channel'] = $result->channel;
+            $response['rpin'] = $result->rPin;
+            $response['student_number'] = $input['payerId'];
+            $response['student_name'] = $input['payerName'];
+            $response['student_id'] = $input['nationalId'];
+            $response['term'] = $input['scope'];
+            $response['orderId'] = $result->orderId;
+            $response['status'] = "00";
+            $response['description'] = $input['description'];
+            $response['amount'] = number_format($total, 2, '.', '');
+            $response['redirectUrl'] = $result->returnUrl;
+            $response['amounttopay'] = $result->amounttopay;
+            //dd($response);
+            $amounttopay = $result->amounttopay;
+            $payermobile = $result->payermobile;
+
+            $msg = "Your Mobile Money Payment Ref No.:".$result->rPin."\nAmount To Pay:".$amounttopay."\nPay Using any of the Mobile Money channels - MTN(*225#). \nThank You";
+            send_sms($payermobile, $msg);
+
+
+            return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+
+        }else
+        {
+            //dd($result);
+            \Session::flash('error', (isset($result->message) ? $result->message : 'Error experienced. Please try again'));
+            $payerName = $input['payerName'];
+            return \Redirect::back()->with('error', (isset($result->message) ? $result->message : 'Error experienced. Please try again'));
+        }
+	}
+
+
+    public function handleWalletPayment($input)
+    {
+        $data = \Crypt::encrypt($input);
+        $response['data'] = $data;
+        //$response = $input;
+        $response['redirectUrl'] = 'http://wallet.probasepay.com/data/receiver_listener';
+        //dd($response);
+        return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+    }
+
+    public function handleRedirectToWalletPayment()
+    {
+        $input = \Input::all();
+        $data = \Crypt::encrypt($input);
+        $response['data'] = $data;
+        $response['rand'] = str_random(5);
+        $response['redirectUrl'] = 'http://wallet.probasepay.com/data/receiver_listener';
+        //dd($response);
+        return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+    }
+
+    public function processWebEaglePaymentGoToOTP()
+    {
+        $input = \Input::all();
+        if(isset($input['cardnum']) && strlen($input['cardnum'])>0 &&
+            isset($input['expdate']) && strlen($input['expdate'])>0 &&
+            isset($input['cvv']) && strlen($input['cvv'])>0 &&
+            isset($input['data']) && strlen($input['data'])>0) {
+            $data = \Crypt::decrypt($input['data']);
+            $input = $input + $data;
+            //dd($input);
+            $paymentItems = $input['paymentItem'];
+            $itemAmounts = $input['amount'];
+
+            $total = 0;
+            for ($i = 0; $i < sizeof($itemAmounts); $i++) {
+                $total = $total + $itemAmounts[$i];
+            }
+
+
+            $jsonData = array('pan' => $input['cardnum'],
+                'cvv' => $input['cvv'],
+                'expiryDate' => $input['expdate'],
+                'payeeFirstName' => $input['payerName'],
+                'payeeEmail' => $input['payerEmail'],
+                'payeeMobile' => $input['payerPhone'],
+                'amount' => (number_format($total, 2, '.', '')),
+                'responseUrl' => $input['responseurl'],
+                'orderId' => $input['orderId'],
+                'hash' => $input['hash'],
+                'merchantId' => $input['merchantId'],
+                'deviceCode' => $input['deviceCode'],
+                'serviceTypeId' => $input['serviceTypeId']);
+
+            //dd($jsonData);
+            $jsonData = \Crypt::encrypt(json_encode($jsonData));
+
+            $jsonDataLump = array('txnDetail' => $jsonData,
+                'bankcode' => substr($input['cardnum'], 4, 3));
+            $jsonEncode = json_encode($jsonDataLump);
+            //dd($jsonEncode);
+            $base64 = base64_encode($jsonEncode);
+            $dataForServer = array('transactionObject' => $base64);
+
+
+            $data = \Crypt::encrypt($input);
+
+
+            $result = handleSOAPCalls('generateOTPForTransaction', 'http://' . getServiceBaseURL() . '/ProbasePayEngine/services/PaymentServices?wsdl', $dataForServer);
+
+            //dd($result);
+
+            if (isset($result->status) && $result->status == 900) {
+                $input['txnRef'] = $result->txnRef;
+                $input['token'] = $result->token;
+                $otp = $result->otp;
+                $otpRec = $result->otpRec;
+
+                $msg = "Transaction #" . $result->txnRef . " currently in progress. \nYour OTP to complete transaction is " . $otp . "\n\nThank You.";
+                send_sms($otpRec, $msg);
+
+                $data = \Crypt::encrypt($input);
+                $payerName = $input['payerName'];
+                return view('guests.payment.web.eagle_card_payment_otp', compact('data', 'paymentItems', 'itemAmounts', 'payerName'));
+            } else {
+                //dd($result);
+                \Session::flash('error', (isset($result->message) ? $result->message : 'Error experienced. Please try again'));
+                $payerName = $input['payerName'];
+                return view('guests.payment.web.eagle_card_payment', compact('data', 'paymentItems', 'itemAmounts', 'payerName'));
+            }
+
+
+            $data = \Crypt::encrypt($input);
+        }else{
+            $data = $input['data'];
+            \Session::flash('error', 'Invalid card details provided. Provide Card Number, CVV, and Expiry Date');
+            $input = (\Crypt::decrypt($input['data']));
+            //dd($input);
+            $payerName = $input['payerName'];
+            $paymentItems = $input['paymentItem'];
+            $itemAmounts = $input['amount'];
+
+            return view('guests.payment.web.eagle_card_payment', compact('data', 'paymentItems', 'itemAmounts', 'payerName'));
+        }
+    }
+
+    public function processWebEaglePaymentOTP()
+    {
+
+        $input = \Input::all();
+
+        $data = \Crypt::decrypt($input['data']);
+        //dd($data);
+        $paymentItems = $data['paymentItem'];
+        $itemAmounts = $data['amount'];
+
+        $total = 0;
+        for($i=0; $i<sizeof($itemAmounts); $i++)
+        {
+            $total = $total + $itemAmounts[$i];
+        }
+
+        $jsonData = array('pan' => $data['cardnum'],
+            'cvv' => $data['cvv'],
+            'expiryDate' => $data['expdate'],
+            'payeeFirstName' => $data['payerName'],
+            'payeeEmail' => $data['payerEmail'],
+            'payeeMobile' => $data['payerPhone'],
+            'amount' => (number_format($total, 2, '.', '')),
+            'responseUrl' => $data['responseurl'],
+            'orderId' => $data['orderId'],
+            'hash' => $data['hash'],
+            'merchantId' => $data['merchantId'],
+            'serviceTypeId' => $data['serviceTypeId'],
+            'billingPayeeFirstName' => $data['firstName'],
+            'billingPayeeLastName' => $data['lastName'],
+            'billPayeeMobile' => $data['phoneNumber'],
+            'billingPayeeEmail' => $data['email'],
+            'streetAddress' => $data['streetAddress'],
+            'city' => $data['city'],
+            'district' => intval($data['district']),
+            'otp' => $input['otp'],
+            'deviceCode' => $data['deviceCode'],
+            'transactionRef' => $data['txnRef'],
+        );
+        $defaultReturnUrl = $data['responseurl'];
+
+        //dd($jsonData);
+
+
+        $jsonData = \Crypt::encrypt(json_encode($jsonData));
+
+        $jsonDataLump = array('crdobj' => $jsonData,
+            'bankcode' => "PROBASE");
+        $jsonEncode = json_encode($jsonDataLump);
+        //dd($jsonEncode);
+        $base64 = base64_encode($jsonEncode);
+        $dataForServer = array('cardObject' => $base64,
+            'token' => $data['token']);
+
+
+        $data = \Crypt::encrypt($input);
+
+        $result = handleSOAPCalls('processEagleCardWebPayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataForServer);
+
+
+        $response = formatPaymentResponse('WEB', $result, $defaultReturnUrl);
+
+        unset($response['autoReturnToMerchant']);
+        unset($response['autoReturnToMerchant']);
+        $data = \Crypt::encrypt($input);
+        return view('guests.payment.web.eagle_card_payment_final_route', compact('data', 'response'));
+    }
+
+
+    public function handleTestGuzzle()
+    {
+        $client = new \GuzzleHttp\Client();
+        $response['redirectUrl'] = 'http://shikola.com/payments/receipt';
+        $client->post(
+            $response['redirectUrl'],
+            array(
+                'body' => $response
+            )
+        );
+
+        //dd($response->getBody());
+    }
+
+
+
+    public function getEWalletPaymentsListing()
+    {
+        $data['token'] = \Auth::user()->token;
+        $data['channel'] = 'wallet';
+        $data['status'] = 'SUCCESS';
+
+        $result = handleSOAPCalls('getUserTransactionsByChannel', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/TransactionServices?wsdl', $data);
+
+        //dd($result);
+
+        if(handleTokenUpdate($result)==false)
+        {
+            return \Redirect::to('/auth/login')->with('message', 'Session Ended. Login Again');
+        }
+
+        if($result->status == 0)
+        {
+            $transactionList = json_decode($result->transactionList);
+            return view('probasewallet.authenticated.payments', compact('data', 'response', 'transactionList'));
+        }else
+        {
+            return \Redirect::back()->with('error', 'Technical Issues Experienced While Retrieving Transaction Listing. Please try again!');
+        }
+    }
+
+
+
+
+    public function getPayRoutedBill($data)
+    {
+        $data_ = $data;
+        $data = \Crypt::decrypt($data);
+
+        $data1 = NULL;
+        $d1 = \App\Models\LoginData::where('id', '=', $data);
+
+        if($d1->count()>0)
+        {
+            $d2 = $d1->first();
+            $input['data'] = \Crypt::decrypt($d2->data);
+
+            $d2->delete();
+            $data1 = $input['data'];
+        }else{
+            return \Redirect::to('/wallet/dashboard')->with('error', 'Payment has been canceled. Avoid Refreshing your payment page.
+            To continue payment, go back to your merchant website.');
+        }
+
+        if($data1!=NULL && is_array($data1) && in_array('data', array_keys($data1)))
+            $data1 = \Crypt::decrypt($data1['data']);
+
+        $dataToServer['token'] = \Auth::user()->token;
+        $dataToServer['merchantCode'] = $data1['merchantId'];
+        $dataToServer['deviceCode'] = $data1['deviceCode'];
+        $result = handleSOAPCalls('getUserAccountBalances', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/WalletServices?wsdl', $dataToServer);
+
+        //dd($result);
+        if(handleTokenUpdate($result)==false)
+        {
+            return \Redirect::to('/auth/login/'.$data_)->with('message', 'Session Ended. Relogin');
+        }
+
+        if($result->status == 0 && $result->device!=null && $result->merchant!=null && $result->balance!=null && $result->balanceList!=null)
+        {
+            $balanceList = json_decode($result->balanceList);
+            $merchant = json_decode($result->merchant);
+            $device = json_decode($result->device);
+            $balance = $result->balance;
+
+            $paymentAmounts = $data1['amount'];
+            $paymentItems = $data1['paymentItem'];
+            $totalAmount = 0.0;
+            for($f=0; $f<sizeof($paymentAmounts); $f++)
+            {
+                $totalAmount = $totalAmount + $paymentAmounts[$f];
+            }
+            $orderId = $data1['orderId'];
+            $deviceCode = $data1['deviceCode'];
+            $serviceTypeId = $data1['serviceTypeId'];
+            $responseurl = $data1['responseurl'];
+            $api_key = $merchant->apiKey;
+
+            $hash = $data1['hash'];
+            $toHash = $merchant->merchantCode.$deviceCode.$serviceTypeId.$orderId.number_format($totalAmount, 2, '.', '').$responseurl.$api_key;
+            $toHash2 = $merchant->merchantCode."-".$deviceCode."-".$serviceTypeId."-".$orderId."-".number_format($totalAmount, 2, '.', '')."-".$responseurl."-".$api_key;
+            $confirmHash = hash('sha512', $toHash);
+            //dd($toHash2);
+
+
+            if($hash==$confirmHash) {
+                if (\Auth::user()) {
+$data = \Crypt::encrypt($input['data']);
+                    return view('probasewallet.authenticated.pay_customer_bill', compact('paymentAmounts',
+                        'paymentItems', 'balanceList', 'balance', 'data1', 'merchant', 'orderId', 'data'));
+                } else {
+                    return \Redirect::to('/auth/login/' . ($data));
+                }
+            }else
+            {
+                $response['hash'] = $hash;
+                $response['toHash'] = $toHash2;
+                $response['confirmHash'] = $confirmHash;
+                $response["statusmessage"] = "Invalid Hash";
+                $response["reason"] = "Hash Is Invalid";
+                $response["merchantId"] = $merchant->merchantCode;
+                $response["deviceCode"] = $device->deviceCode;
+                $response["status"] = '05';
+                $response["orderId"] = $orderId;
+                $response["redirectUrl"] = $device->failureUrl;
+                return view('probasewallet.authenticated.post_final_route', compact('response'));
+            }
+        }else
+        {
+            return \Redirect::back()->with('error', 'Technical Issues Experienced While Retrieving Transaction Listing. Please try again!');
+        }
+    }
+
+
+    public function postPayBill()
+    {
+        $input = \Input::all();
+
+        $data = \Crypt::decrypt($input['data']);
+        if(is_array($data) && in_array('data', array_keys($data)))
+            $data = \Crypt::decrypt($data['data']);
+
+        $payFrom = "";
+        //dd($data);
+
+        $paymentItems = $data['paymentItem'];
+        $itemAmounts = $data['amount'];
+
+        $total = 0;
+        for($i=0; $i<sizeof($itemAmounts); $i++)
+        {
+            $total = $total + $itemAmounts[$i];
+        }
+
+
+        for($i=0; $i<sizeof($input['pay_from']); $i++)
+        {
+            $payFrom = $payFrom."".str_replace('|||', '---', $input['pay_from'][$i]).":::";
+        }
+
+        $jsonData = array('payFrom' => $payFrom,
+            'payeeFirstName' => $data['payerName'],
+            'payeeEmail' => $data['payerEmail'],
+            'payeeMobile' => $data['payerPhone'],
+            'amount' => (number_format($total, 2, '.', '')),
+            'responseUrl' => $data['responseurl'],
+            'orderId' => $data['orderId'],
+            'hash' => $data['hash'],
+            'merchantId' => $data['merchantId'],
+            'serviceTypeId' => $data['serviceTypeId'],
+            'billingPayeeFirstName' => $data['firstName'],
+            'billingPayeeLastName' => $data['lastName'],
+            'billPayeeMobile' => $data['phoneNumber'],
+            'billingPayeeEmail' => $data['email'],
+            'streetAddress' => $data['streetAddress'],
+            'city' => $data['city'],
+            'district' => intval($data['district']),
+            'deviceCode' => $data['deviceCode'],
+        );
+        $defaultReturnUrl = $data['responseurl'];
+
+        $merchantId = $data['merchantId'];
+        $deviceCode = $data['deviceCode'];
+        //dd($jsonData);
+
+
+        $jsonData = \Crypt::encrypt(json_encode($jsonData));
+
+        $jsonDataLump = array('wallobj' => $jsonData,
+            'bankcode' => "PROBASE");
+        $jsonEncode = json_encode($jsonDataLump);
+        //dd($jsonEncode);
+        $base64 = base64_encode($jsonEncode);
+        $dataForServer = array('walletObject' => $base64,
+            'token' => \Auth::user()->token);
+
+
+        $data = \Crypt::encrypt($input);
+        //dd($dataForServer);
+        $result = handleSOAPCalls('processEWalletPaymentGenerateOTP', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataForServer);
+
+
+        if($result->status == 1002) {
+            $txnRef = json_decode($result->txnRef);
+            $ref = "";
+            foreach($txnRef as $tnref => $value)
+            {
+                $ref = $value.", ";
+            }
+            $data = array();
+            $data['payFrom'] = $result->payFrom;
+            $data['balance'] = $result->balance;
+            $data['orderId'] = $result->orderId;
+            $data['txnRef'] = $txnRef;
+            $data['paymentItems'] = $paymentItems;
+            $data['itemAmounts'] = $itemAmounts;
+            $data['merchantId'] = $merchantId;
+            $data['deviceCode'] = $deviceCode;
+
+            $otp = $result->otp;
+            $primaryMobile = $result->primaryAccountMobile;
+            $msg = "To complete transaction Ref Nos. ".substr($ref, 0, (strlen($ref) - 2))." \nYour OTP is ".$otp."\n\nThank You.";
+            send_sms($primaryMobile, $msg, 'ProbWallet');
+
+            return \Redirect::to('/wallet/pay/customer/go-to-otp/'.\Crypt::encrypt($data));
+        }else
+        {
+            return \Redirect::back()->with('error', isset($result->message) ? $result->message : "Errors initializing payment");
+        }
+    }
+
+    public function getGoToOTP($data1)
+    {
+        $data = \Crypt::decrypt($data1);
+        $balance = $data['balance'];
+        $txnRef = ($data['txnRef']);
+        $paymentItems = $data['paymentItems'];
+        $paymentAmounts = $data['itemAmounts'];
+        $payFrom = $data['payFrom'];
+        $orderId = $data['orderId'];
+        $merchantId = $data['merchantId'];
+        $deviceCode = $data['deviceCode'];
+        return view('probasewallet.authenticated.get_otp', compact('merchantId', 'deviceCode', 'data1', 'orderId', 'balance', 'txnRef', 'paymentItems', 'paymentAmounts', 'payFrom'));
+    }
+
+
+    public function getPayCustomerGoToOTP($data1)
+    {
+        $data = \Crypt::decrypt($data1);
+        $balance = $data['balance'];
+        $txnRef = $data['debitTxnRef'];
+        $creditTxnRef = $data['creditTxnRef'];
+        $payFrom = $data['payFrom'];
+        return view('probasewallet.authenticated.get_new_pay_otp', compact('data1', 'balance', 'txnRef', 'payFrom'));
+    }
+
+
+    public function postSendOTP()
+    {
+        $input = \Input::all();
+        $data =\Crypt::decrypt($input['data']);
+        //dd($data);
+
+        $txnRefStr = "";
+        foreach($data['txnRef'] as $key => $value)
+        {
+            $txnRefStr = $txnRefStr."".$value.":::";
+        }
+        $jsonData = array('orderId' => $data['orderId'],
+            'txnRef' => $txnRefStr,
+            'otp' => $input['otp'],
+            'token' => \Auth::user()->token,
+            'merchantCode' => $data['merchantId'],
+            'deviceCode' => $data['deviceCode']
+        );
+
+        //dd($jsonData);
+
+        $result = handleSOAPCalls('validateEWalletOTPPayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $jsonData);
+
+
+        if(isset($result->status) && $result->status == "00")
+        {
+            $device = json_decode($result->device);
+            $response["statusmessage"] = "Payment Transaction Was Successful";
+            $response["reason"] = "Payment Transaction Successful";
+            $response["merchantId"] = $data['merchantId'];
+            $response["deviceCode"] = $data['deviceCode'];
+            $response["status"] = '00';
+            $response["transactionRefs"] = substr($result->transactionRefs, 0, (strlen($result->transactionRefs)-3));
+            $response["orderId"] = $result->orderRef;
+            $response["channels"] = $result->channels;
+            $response["redirectUrl"] = $device->successUrl;
+
+            //dd($response);
+
+            $walletMobile = $result->walletMobile;
+            $totalamountdebited = $result->totalamountdebited;
+            $orderRef = $result->orderRef;
+            $transactionRefs = $result->transactionRefs;
+
+            $msg = "ProbaseWallet Payment successful! \nOrder Id: #".$orderRef."\nTxn Ref: #".$transactionRefs."\nAmount Debited: #".$totalamountdebited."\n\nThank You.";
+            send_sms($walletMobile, $msg, 'ProbWallet');
+
+
+            return view('probasewallet.authenticated.post_final_route', compact('response'));
+        }else{
+            $device = json_decode($result->device);
+            $response["statusmessage"] = "Payment Transaction Was Not Successful";
+            $response["reason"] = $result->message;
+            $response["merchantId"] = $data['merchantId'];
+            $response["deviceCode"] = $data['deviceCode'];
+            $response["status"] = isset($result->status) ? $result->status : '99';
+            $response["transactionRefs"] = substr($result->transactionRefs, 0, (strlen($result->transactionRefs)-3));
+            $response["orderId"] = $result->orderRef;
+            $response["redirectUrl"] = $device->successUrl;
+            return view('probasewallet.authenticated.post_final_route', compact('response'));
+        }
+    }
+
+
+    public function postSendWalletPayment()
+    {
+        $input = \Input::all();
+        if(strpos($input['walletcode_account'], "-")>0) {
+            $walletCode = explode('-', $input['walletcode_account']);
+            $dataForServer['recWalletcode'] = \Crypt::encrypt($walletCode[0]);
+            $dataForServer['recAccountIdentifier'] = \Crypt::encrypt($walletCode[1]);
+            $dataForServer['amount'] = $input['amount'];
+            $dataForServer['detail'] = $input['payinfo'];
+            $dataForServer['accesscodeS'] = \Crypt::encrypt(intval($input['accesscode']));
+            $dataForServer['accountIdS'] = \Crypt::encrypt(explode('---', $input['pay_from'])[0]);
+            $dataForServer['token'] = \Auth::user()->token;
+
+            $result = handleSOAPCalls('processGenerateOTPForCustomerPayOut', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataForServer);
+
+
+            if(handleTokenUpdate($result)==false)
+            {
+                return \Redirect::to('/auth/login')->with('error', 'Login session expired. Please relogin again');
+            }
+
+
+            if ($result->status == 1002) {
+                //$txnRef = json_decode($result->txnRef);
+                $data = array();
+                $data['debitTxnRef'] = $result->debitTxnRef;
+                $data['creditTxnRef'] = $result->creditTxnRef;
+                $data['balance'] = $result->balance;
+                $data['payFrom'] = $input['pay_from'];
+
+                $otpRec = $result->otpReceipient;
+                $debitTxnRef = $result->debitTxnRef;
+                $otp = $result->otp;
+                $msg = "Transaction #".$debitTxnRef." currently in progress. \nYour OTP to complete the transaction is ".$otp."\n\nThank You.";
+                send_sms($otpRec, $msg);
+
+                return \Redirect::to('/wallet/pay/customer/pay_customer/go-to-otp/' . \Crypt::encrypt($data));
+            } else {
+                return \Redirect::back()->with('error', isset($result->message) ? $result->message : "Errors initializing payment");
+            }
+        }else{
+            return \Redirect::back()->with('error', "Invalid Wallet Account Code Provided. Receipient Wallet Account Code must be in the format -
+            WALLET CODE-WALLET ACCOUNT NUMBER");
+        }
+    }
+
+
+
+
+
+
+    public function postPayCustomerHandleOTP()
+    {
+        $input = \Input::all();
+        $data1 = \Crypt::decrypt($input['data']);
+
+
+        $data['otp'] = $input['otp'];
+        $data['debitTxnRef'] = \Crypt::encrypt($data1['debitTxnRef']);
+        $data['creditTxnRef'] = \Crypt::encrypt($data1['creditTxnRef']);
+        $data['token'] = \Auth::user()->token;
+
+
+
+        $result = handleSOAPCalls('validateEWalletOTPPayout', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $data);
+
+
+        if(handleTokenUpdate($result)==false)
+        {
+            return \Redirect::to('/auth/login')->with('error', 'Login session expired. Please relogin again');
+        }
+
+
+        if ($result->status == 910) {
+            $txnRef = json_decode($result->txnRef);
+            $amount = $result->amount;
+
+            $payerMobile = $result->payerMobile;
+            $recieverMobile = $result->recieverMobile;
+            $creditBalance = $result->balanceCredit;
+            $debitBalance = $result->balanceDebit;
+            $paidFrom = $result->paidFrom;
+            $paidTo = $result->paidTo;
+
+            $msg = "ProbaseWallet Payout Ref #".$txnRef."\nAccount No:".$paidFrom."\nAmount Debited:ZMW".$amount."\nBal:ZMW".$debitBalance."\n\nThank You";
+            send_sms($payerMobile, $msg, 'ProbWallet');
+
+            $msg = "ProbaseWallet Payout Ref #".$txnRef."\nAccount No:\".$paidTo.\"\nAmount Credited:ZMW".$amount."\nBal:ZMW".$creditBalance."\n\nThank You";
+            send_sms($recieverMobile, $msg, 'ProbWallet');
+
+
+            $message = 'Payment transaction was successful. <br>Transaction Ref# :$txnRef<br>Amount Paid: ZMW';
+            $message = $message."".number_format($amount, 2, '.', ',');
+            return \Redirect::to('/wallet/payments')->with('message', $message);
+        } else {
+            return \Redirect::back()->with('error', isset($result->message) ? $result->message : "Errors initializing payment");
+        }
+    }
+
+
+    public function getPayNewCustomer()
+    {
+        $input = \Input::all();
+        $dataForServer['token'] = \Auth::user()->token;
+
+        $result = handleSOAPCalls('getEWalletAccountBalance', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataForServer);
+
+
+        if($result->status == 2003) {
+            $balanceList = json_decode($result->balanceList);
+            $balance = $result->balance;
+            $data1 = \Crypt::encrypt($input);
+
+            return view('probasewallet.authenticated.pay_new_customer', compact('balanceList', 'balance', 'data1'));
+        }else if($result->status == -1) {
+            return \Redirect::to('/auth/login');
+        }else{
+            return \Redirect::back()->with('error', isset($result->message) ? $result->message : "Experienced Issues retrieving your balance");
+        }
+    }
+
+
+    public function getPayNewMobileCustomer()
+    {
+        $input = \Input::all();
+        $dataForServer['token'] = \Auth::user()->token;
+
+        $result = handleSOAPCalls('getEWalletAccountBalance', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataForServer);
+
+
+        if($result->status == 2003) {
+            $balanceList = json_decode($result->balanceList);
+            $balance = $result->balance;
+            $data1 = \Crypt::encrypt($input);
+
+            return view('probasewallet.authenticated.pay_new_mobile_customer', compact('balanceList', 'balance', 'data1'));
+        }else if($result->status == -1) {
+            return \Redirect::to('/auth/login');
+        }else{
+            return \Redirect::back()->with('error', isset($result->message) ? $result->message : "Experienced Issues retrieving your balance");
+        }
+    }
+
+
+    public function postSendWalletPaymentForMobilePayment()
+    {
+        $input = \Input::all();
+        if(strpos($input['mobileno'], "-")>0) {
+            $mobileAcct = explode('-', $input['mobileno']);
+            $dataForServer['recMobileNo'] = \Crypt::encrypt($mobileAcct[0]);
+            $dataForServer['recAccountIdentifier'] = \Crypt::encrypt($mobileAcct[1]);
+            $dataForServer['amount'] = $input['amount'];
+            $dataForServer['detail'] = $input['payinfo'];
+            $dataForServer['accesscodeS'] = \Crypt::encrypt(intval($input['accesscode']));
+            $dataForServer['accountIdS'] = \Crypt::encrypt(explode('---', $input['pay_from'])[0]);
+            $dataForServer['token'] = \Auth::user()->token;
+
+            $result = handleSOAPCalls('processGenerateOTPForCustomerPayOutForMobilePayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataForServer);
+
+
+            if(handleTokenUpdate($result)==false)
+            {
+                return \Redirect::to('/auth/login')->with('error', 'Login session expired. Please relogin again');
+            }
+
+
+            if ($result->status == 1002) {
+                //$txnRef = json_decode($result->txnRef);
+                $data = array();
+                $data['debitTxnRef'] = $result->debitTxnRef;
+                $data['creditTxnRef'] = $result->creditTxnRef;
+                $data['balance'] = $result->balance;
+                $data['payFrom'] = $input['pay_from'];
+
+                $otp = $result->otp;
+                $otpRec = $result->otpReceiver;
+                $msg = "Transaction #".$result->debitTxnRef." currently in progress. \nYour OTP to complete transaction is ".$otp."\n\nThank You.";
+                send_sms($otpRec, $msg);
+
+                return \Redirect::to('/wallet/pay/customer/pay_customer/go-to-otp-for-mobile-payment/' . \Crypt::encrypt($data));
+            } else {
+                return \Redirect::back()->with('error', isset($result->message) ? $result->message : "Errors initializing payment");
+            }
+        }else{
+            return \Redirect::back()->with('error', "Invalid Wallet Account Code Provided. Receipient Wallet Account Code must be in the format -
+            WALLET CODE-WALLET ACCOUNT NUMBER");
+        }
+    }
+
+
+    public function getPayCustomerGoToOTPForMobilePayment($data1)
+    {
+        $data = \Crypt::decrypt($data1);
+        $balance = $data['balance'];
+        $txnRef = $data['debitTxnRef'];
+        $creditTxnRef = $data['creditTxnRef'];
+        $payFrom = $data['payFrom'];
+        return view('probasewallet.authenticated.get_new_pay_otp_for_mobile_payment', compact('data1', 'balance', 'txnRef', 'payFrom'));
+    }
+
+
+    public function postPayCustomerHandleOTPForMobilePayment()
+    {
+        $input = \Input::all();
+        $data1 = \Crypt::decrypt($input['data']);
+
+
+        $data['otp'] = $input['otp'];
+        $data['debitTxnRef'] = \Crypt::encrypt($data1['debitTxnRef']);
+        $data['creditTxnRef'] = \Crypt::encrypt($data1['creditTxnRef']);
+        $data['token'] = \Auth::user()->token;
+
+
+
+        $result = handleSOAPCalls('validateEWalletOTPPayoutForMobilePayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $data);
+
+
+        if(handleTokenUpdate($result)==false)
+        {
+            return \Redirect::to('/auth/login')->with('error', 'Login session expired. Please relogin again');
+        }
+
+
+        if ($result->status == 910) {
+            $txnRef = json_decode($result->txnRef);
+            $amount = $result->amount;
+            $paidFrom = $result->paidFrom;
+            $notifyReceipient = $result->notifyReceipient;
+            $message = 'Payment transaction was successful. <br>Transaction Ref# :$txnRef<br>Amount Paid: ZMW';
+            $message = $message."".number_format($amount, 2, '.', ',');
+
+            $msg = "ProbaseWallet Payment Transaction Successful.\nTXNREF:#".$txnRef."\nAmount:ZMW".$amount."\nAccount Debited:".$paidFrom;
+            send_sms($notifyReceipient, $msg, 'ProbWallet');
+
+
+            return \Redirect::to('/wallet/payments')->with('message', $message);
+        } else {
+            return \Redirect::back()->with('error', isset($result->message) ? $result->message : "Errors initializing payment");
+        }
+    }
+
+
+    public function handleCybersourcePayment()
+    {
+
+        $input = \Input::all();
+        $data1 = \Crypt::decrypt($input['data']);
+        $input = \Input::except('data') + $data1;
+
+        $amt = 0;
+        $itemAmounts = $input['amount'];
+        $paymentItems = $input['paymentItem'];
+        $customdata = isset($input['customdata']) ? $input['customdata'] : NULL;
+        $items = "";
+        $totaldescription = "";
+        if(sizeof($paymentItems)>0 && sizeof($paymentItems)==sizeof($itemAmounts)) {
+            for ($i = 0; $i < sizeof($itemAmounts); $i++) {
+                $amt = $amt + $itemAmounts[$i];
+                $items = $items."".$paymentItems[$i].",";
+                $totaldescription = $totaldescription."".$paymentItems[$i]."=".$itemAmounts[$i].";";
+            }
+        }
+
+
+        if($customdata!=NULL && sizeof($customdata)>0) {
+
+            $data['merchant_defined_data'] = json_encode($customdata, 128);
+        }
+
+
+
+        $data['billingFirstName'] = $input['firstName'];
+        $data['billingLastName'] = $input['lastName'];
+        $data['billingPhone'] = $input['phoneNumber'];
+        $data['billingEmail'] = $input['email'];
+        $data['billingStreetAddress'] = $input['streetAddress'];
+        $data['billingCity'] = ($input['city']);
+        $data['billingDistrict'] = (explode('_', $input['district'])[0]);
+        $data['merchantId'] = $input['merchantId'];
+        $data['deviceCode'] = $input['deviceCode'];
+        $data['serviceTypeId'] = $input['serviceTypeId'];
+        $data['orderId'] = $input['orderId'];
+        $data['hash'] = $input['hash'];
+        $data['payerName'] = $input['payerName'];
+        $data['payerEmail'] = $input['payerEmail'];
+        $data['payerPhone'] = $input['payerPhone'];
+        $data['responseurl'] = $input['responseurl'];
+        $data['payerId'] = $input['payerId'];
+        $data['nationalId'] = $input['nationalId'];
+        $data['scope'] = $input['scope'];
+        $data['description'] = $input['description'];
+        $data['totaldescription'] = $totaldescription;
+        $data['amount'] = number_format($amt, 2, '.', '');
+
+
+        //dd($data);
+
+
+        $result = handleSOAPCalls('initiateCyberSourcePayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $data);
+
+        //dd($result);
+
+
+
+        if (isset($result->status) && $result->status == 1002) {
+
+            $params['access_key'] = $result->access_key;
+            $params['profile_id'] = $result->profile_id;
+            $params['transaction_uuid'] = $result->transaction_uuid;
+            //$params['signature'] = $result->signature;
+            $params['signed_field_names'] = $result->signed_field_names;
+            $params['unsigned_field_names'] = $result->unsigned_field_names;
+            $params['signed_date_time'] = gmdate("Y-m-d\TH:i:s\Z");
+            $params['locale'] = $result->locale;
+            $params['transaction_type'] = $result->transaction_type;
+            $params['reference_number'] = $result->reference_number;
+            $params['amount'] = $result->amount;
+            $params['currency'] = $result->currency;
+            for($im=1; $im<101; $im++) {
+                $key_1 = 'merchant_defined_data' + $im;
+                if (isset($result->$key_1) && $result->$key_1 != NULL) {
+                    $params[$key_1] = $result->$key_1;
+                }
+            }
+
+
+            //dd($params);
+
+            $params['signature'] = signData(buildDataToSign($params), \UserConstants::$CYBERSOURCE_CONSTANT);
+            $params['bill_to_address_city'] = $result->billingCity;
+            $params['bill_to_address_country'] = "ZM";
+            $params['bill_to_address_line1'] = $result->billingStreetAddress;
+            $params['bill_to_address_postal_code'] = substr($result->billingDistrictCode, 0, 5);
+            $params['bill_to_address_state'] = substr($result->billingState, 0, 9);
+            $params['bill_to_email'] = $result->billingEmail;
+            $params['bill_to_forename'] = $result->billingFirstName;
+            $params['bill_to_phone'] = $result->billingPhone;
+            $params['bill_to_surname'] = $result->billingLastName;
+            //echo $result->signature."<br>";
+            //dd($params);
+            $data = json_encode($params);
+			$billData = new \App\Models\BillData();
+			$billData->data = $data;
+			$billData->save(); //dd($billData);
+
+            return \Redirect::to('/payments/forward-cyberpay/'.\Crypt::encrypt($billData->id));
+
+        }
+        else {
+            return \Redirect::back()->with('error', 'Error processing payment');
+        }
+    }
+
+
+    public function handleForwardToCyberPay($data)
+    {
+		$data = \Crypt::decrypt($data);
+		$billData = \App\Models\BillData::where('id', '=', $data);
+        if($billData->count() >0)
+		{
+			$billData = $billData->first();
+			$billData_ = $billData->data;
+			$params = json_decode($billData_);
+$billData->delete();
+			return view('guests.payment.cybersource.forward', compact('params'));
+		}else
+		{
+			return \Redirect::back()->with('error', 'Error processing payment');
+		}
+    }
+
+
+    public function handleCybersourceResponse()
+    {
+        $data1 = \Input::all();
+        if(isset($data1['decision']) && strtolower($data1['decision'])=='error')
+        {
+            $response["statusmessage"] = $data1['message'];
+            $response["reason"] = $data1['message'];
+            $response["status"] = '11';
+            $response["transactionDate"] = date('Y-m-d H:i:s');
+            if(isset($data1['req_reference_number']))
+                $response["merchantId"] = explode('-', $data1['req_reference_number'])[0];
+            if(isset($data1['req_transaction_uuid']))
+                $response["transactionRef"] = $data1['req_transaction_uuid'];
+            if(isset($data1['req_reference_number']))
+                $response["orderId"] = explode('-', $data1['req_reference_number'])[1];
+
+            return \Redirect::to('/payments/error-processing/'.\Crypt::encrypt($response))->with('error', $data1['message']);
+        }
+        $data1 = json_encode($data1);
+        $data1 = \Crypt::encrypt($data1);
+        $data['responseData'] = $data1;
+
+        $result = handleSOAPCalls('finishCyberSourcePayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $data);
+
+        //dd($result);
+
+        if (isset($result->status) && $result->status == "00") {
+            $response["statusmessage"] = $result->message;
+            $response["reason"] = $result->message;
+            $response["merchantId"] = $result->merchantId;
+            $response["deviceCode"] = $result->deviceCode;
+            $response["channel"] = $result->channel;
+            $response["status"] = '00';
+            $response["transactionRef"] = $result->txnRef;
+            $response["transactionDate"] = date('Y-m-d H:i:s');
+            $response["orderId"] = $result->orderId;
+            $response["redirectUrl"] = $result->returnUrl;
+            $response["amount"] = $result->amount;
+
+            $billingFLName = $result->billingFLName;
+            $billingPhone = $result->billingPhone;
+
+            $msg = "Dear ".$billingFLName.", Your Payment Was Successful. \nRef No.:".$result->txnRef."\nAmount To Pay:".$result->amount."\n. \nThank You";
+            send_sms($billingPhone, $msg);
+
+
+            return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+        }else
+        {
+            $response["statusmessage"] = $result->message;
+            $response["reason"] = $result->message;
+            $response["status"] = isset($result->status) ? $result->status : "99";
+            $response["transactionDate"] = date('Y-m-d H:i:s');
+            if(isset($result->merchantId))
+                $response["merchantId"] = $result->merchantId;
+            if(isset($result->deviceCode))
+                $response["deviceCode"] = $result->deviceCode;
+            if(isset($result->txnRef))
+                $response["transactionRef"] = $result->txnRef;
+            if(isset($result->orderId))
+                $response["orderId"] = $result->orderId;
+            if(isset($result->returnUrl))
+                $response["redirectUrl"] = $result->returnUrl;
+            else
+                return \Redirect::to('/payments/init')->with('error', $result->message);
+
+            return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+        }
+
+
+    }
+
+
+    public function getNewRPINPayment()
+    {
+        $result = handleSOAPCalls('listMerchants', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/MerchantServices?wsdl', [
+            'token' => \Auth::user()->token,
+        ]);
+
+        if(handleTokenUpdate($result)==false)
+        {
+            return redirect('/')->with('error', 'Login session expired. Please relogin again');
+        }
+
+        $merchantList = json_decode($result->merchantlist);
+        return view('core.authenticated.payments.new_rpin_payment', compact('merchantList'));
+    }
+
+    public function postNewRPINPayment()
+    {
+        $data = \Input::all();
+        $data = \Crypt::encrypt($data);
+        return \Redirect::to('/bank-teller/vendor-service/confirm-payment/'.$data);
+    }
+
+
+    public function getConfirmRPINPayment($data)
+    {
+        $data1 = \Crypt::decrypt($data);
+        return view('core.authenticated.payments.new_rpin_confirm_payment', compact('data1', 'data'));
+    }
+
+    public function postConfirmRPINPayment()
+    {
+        $input = \Input::all();
+        $data = \Crypt::decrypt($input['data']);
+        $dataService = [
+            'token' => \Auth::user()->token,
+            'vendorServiceIdS' => \Crypt::encrypt(intval(explode('|||', $data['vendorService'])[0])),
+            'amount' => floatval($data['amount']),
+            'payeeEmail' => $data['payeeEmail'],
+            'payeeMobile' => $data['payeeMobile'],
+            'payeeFullName' => $data['payeeFullName'],
+        ];
+
+
+        $result = handleSOAPCalls('processVendorServicePayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataService);
+
+
+        if(handleTokenUpdate($result)==false)
+        {
+            return redirect('/')->with('error', 'Login session expired. Please relogin again');
+        }
+
+        if (isset($result->status) && $result->status == 0) {
+            $txnRef = ($result->txnRef);
+            $amount = $result->amounttopay;
+            $rPin = $result->rPin;
+            $vendorService = json_decode($result->vendorService);
+            $vendorService = $vendorService->serviceName;
+            $payermobile = $result->payermobile;
+            $msg = 'Payment transaction was successful. \nTransaction Ref# :'.$txnRef.'\nAmount'.
+                'Paid: ZMW'.number_format($amount, 2, '.', ',').'\nVendor Service:'.$vendorService.'\nRPIN#:'.$rPin;
+
+            $message = 'Payment transaction was successful. <br>Transaction Ref# :'.$txnRef.'<br>Amount'.
+                'Paid: ZMW'.number_format($amount, 2, '.', ',').'<br>Vendor Service:'.$vendorService.'<br>RPIN#:'.$rPin;
+            send_sms($payermobile, $msg);
+
+
+            return \Redirect::to('/bank-teller/vendor-service/new-payment')->with('message', $message);
+        } else {
+            return \Redirect::back()->with('error', isset($result->message) ? $result->message : "Errors experienced making payment");
+        }
+    }
+
+
+
+
+    /**Get Confirm Existing RPIN*/
+    public function getNewExistingRPINPayment()
+    {
+
+        return view('core.authenticated.payments.new_existing_rpin_payment');
+    }
+
+    public function postNewExistingRPINPayment()
+    {
+        $input = \Input::all();
+        $data = [
+            'token' => \Auth::user()->token,
+            'rpinS' => \Crypt::encrypt($input['rpin'])
+        ];
+        $result = handleSOAPCalls('verifyRPINPayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $data);
+
+
+
+        if(handleTokenUpdate($result)==false)
+        {
+            return redirect('/')->with('error', 'Login session expired. Please relogin again');
+        }
+
+        if(isset($result->status) && $result->status==0) {
+            $data = \Crypt::encrypt(($result));
+            return \Redirect::to('/bank-teller/vendor-service/confirm-existing-rpin/'.$data);
+        }
+        return \Redirect::back()->with('error', isset($result->message) ? $result->message : 'Error experienced find payment matching RPIN provided');
+
+
+    }
+
+
+    public function getConfirmExistingRPINPayment($data)
+    {
+        $data1 = \Crypt::decrypt($data);
+
+        return view('core.authenticated.payments.new_existing_rpin_confirm_payment', compact('data1', 'data'));
+    }
+
+    public function postConfirmExistingRPINPayment()
+    {
+        $input = \Input::all();
+        $data = \Crypt::decrypt($input['data']);
+
+
+        $dataService = [
+            'token' => \Auth::user()->token,
+            'amount' => floatval($input['amount']),
+            'rpinS' => \Crypt::encrypt($data->rpin),
+            'transactionRef' => $data->transactionRef,
+        ];
+
+
+        $result = handleSOAPCalls('confirmRPINPayment', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl', $dataService);
+
+
+        if(handleTokenUpdate($result)==false)
+        {
+            return redirect('/')->with('error', 'Login session expired. Please relogin again');
+        }
+
+        if (isset($result->status) && $result->status == 0) {
+            $txnRef = ($result->transactionRef);
+            $amount = $result->amount;
+            $rPin = $result->rpin;
+            $payermobile = $result->customerMobile;
+            $msg = 'Payment transaction was successful. \nTransaction Ref# :'.$txnRef.'\nAmount'.
+                'Paid: ZMW'.number_format($amount, 2, '.', ',').'\nRPIN#:'.$rPin;
+
+            $message = 'Payment transaction was successful. <br>Transaction Ref# :'.$txnRef.'<br>Amount'.
+                'Paid: ZMW'.number_format($amount, 2, '.', ',').'<br>RPIN#:'.$rPin;
+            send_sms($payermobile, $msg);
+
+
+            return \Redirect::to('/bank-teller/vendor-service/existing-rpin')->with('message', $message);
+        } else {
+            return \Redirect::back()->with('error', isset($result->message) ? $result->message : "Errors experienced making payment");
+        }
+    }
+
+
+    
+    public function handleGetOnlineBankResponse()
+    {
+        dd(2);
+    }
+
+    public function handleOnlineBankResponse()
+    {
+        $data1 = \Input::all();
+        //dd($data1);
+        /*s:388:"{"payment_status_":"S","payment_status_description_":"Payment process successfully","bank_reference_":"MXN1493363626",
+        "payment_date_":"2017-04-28 07:13:46","unique_reference":"0118347928","student_name":"Sabra Myrtis","student_number":"SFE-2003\/191682",
+        "student_id":"2003\/191682","term":"Second term (2017) - 2017 | Demo School","description":"","amount":"100.00","req_amount":"100.00"}";*/
+        $data1['req_amount'] = $data1['amount'];
+        $data1['statusCode'] = $data1['payment_status_']=='S' ? '0000' : $data1['payment_status_'];
+        $data1['statusCode_'] = $data1['payment_status_']=='S' ? '0000' : $data1['payment_status_'];
+        $data1['statusDescription'] = $data1['payment_status_description_'];
+        $data1['messageReference'] = $data1['bank_reference_'];
+        $data1['action'] = $data1['payment_status_']=='S' ? '0000' : $data1['payment_status_'];
+        $data1['paymentParticulars'] = json_encode($data1);
+        $data1['responseTimestamp'] = $data1['payment_date_'];
+        $data1['clientCode'] = $data1['unique_reference'];
+        $data1['accessId'] = "";
+        $data1['type'] = "";
+        $data1['locale'] = "";
+        $data1['currency'] = "";
+        $data1['country'] = "ZM";
+        $data1['requestTimestamp'] = $data1['payment_date_'];
+        $data1['message'] = $data1['payment_status_description_'];
+        $data1 = json_encode($data1);
+
+        $data1 = \Crypt::encrypt($data1);
+        $data['responseData'] = $data1;
+
+       
+        $result = handleSOAPCalls('completePaymentForOnlineBanking', 'http://'.getServiceBaseURL().'/ProbasePayEngine/services/PaymentServices?wsdl&r=3', $data);
+        
+
+
+
+
+
+        if (isset($result->status) && $result->status == "00") {
+            $response["statusmessage"] = $result->message;
+            $response["reason"] = $result->message;
+            $response["merchantId"] = $result->merchantId;
+            $response["deviceCode"] = $result->deviceCode;
+            $response["channel"] = $result->channel;
+            $response["status"] = '00';
+            $response["transactionRef"] = $result->transactionRef;
+            $response["transactionDate"] = $result->transactionDate;
+            $response["orderId"] = $result->orderId;
+            $response["redirectUrl"] = $result->returnUrl;
+            $response["amount"] = $result->amount;
+            $response["amount"] = $result->amount;
+
+            $billingFLName = $result->billingFLName;
+            $billingPhone = $result->billingPhone;
+
+            return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+        }else
+        {
+
+                   $response["statusmessage"] = "Transaction Failed.";
+                   $response["reason"] = "Transaction Failed.";
+                   $response["status"] = isset($result->status) ? $result->status : "99";
+                   $response["transactionDate"] = date('Y-m-d H:i:s');
+                   if(isset($result->merchantId))
+                       $response["merchantId"] = $result->merchantId;
+                   if(isset($result->deviceCode))
+                       $response["deviceCode"] = $result->deviceCode;
+                   if(isset($result->txnRef))
+                       $response["transactionRef"] = $result->txnRef;
+                   if(isset($result->orderId))
+                       $response["orderId"] = $result->orderId;
+                   if(isset($result->returnUrl))
+                       $response["redirectUrl"] = $result->returnUrl;
+                   else
+                       return \Redirect::to('/payments/init')->with('error', isset($result->message) ? $result->message : "Transaction Failed!");
+
+                   return view('guests.payment.web.eagle_card_payment_final_route', compact('response'));
+        }
+    }
+}
+
